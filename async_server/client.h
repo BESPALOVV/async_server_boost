@@ -14,7 +14,7 @@ class client :public boost::enable_shared_from_this<client>, boost::noncopyable
 {
 public:
 
-		client(io_context& context, std::vector<boost::shared_ptr<client>>& clients) :sock_(context), clients_(clients),timer_(context){}
+		explicit client(io_context& context, std::vector<boost::shared_ptr<client>>& clients) :sock_(context), clients_(clients),timer_(context){}
 
 	    static void accept_clients(io_context& context,std::vector<boost::shared_ptr<client>>& clients, const boost::system::error_code& ec);
 
@@ -47,11 +47,13 @@ private:
 
 	void post_check_ping();
 
+	inline void ErrorHandle(const boost::system::error_code& ec);
+
 
 	
 	ip::tcp::socket sock_;
 
-	std::vector<boost::shared_ptr<client>> clients_;
+	std::vector<boost::shared_ptr<client>>& clients_;
 	
 	std::string username;
 
@@ -66,6 +68,7 @@ private:
 	deadline_timer timer_;
 
 	boost::posix_time::ptime last_ping;
+
 
 
 		

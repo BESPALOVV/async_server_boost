@@ -2,6 +2,7 @@
 
  void client::accept_clients(io_context& context,std::vector<boost::shared_ptr<client>>& clients, const boost::system::error_code& ec)
 {
+
 	 if (ec) { std::cout << ec.what() << std::endl; return; }
 
 	ip::tcp::acceptor acceptor(context, ip::tcp::endpoint(ip::tcp::v4(), 1313));
@@ -15,6 +16,8 @@
 
  void client::on_connect(io_context& context, std::vector<boost::shared_ptr<client>>& clients, const boost::system::error_code& ec)
  {
+	 ErrorHandle(ec);
+
 	 clients.push_back(boost::shared_ptr<client>(this));
 
 	 this->start();
@@ -52,7 +55,18 @@
 
 	 auto it = find(clients_.begin(), clients_.end(), this_cl);
 
-	 clients_.erase(it);
+	 for (auto client : clients_)
+	 {
+		 client->clients_list_changed = true;
+	 }
+	 
+	 if (it != clients_.end())
+	 {
+		 clients_.erase(it);
+	 }
+
+
+
  }
 
  void client::do_read()
@@ -64,14 +78,7 @@
 
  void client::on_read(const boost::system::error_code& ec, size_t bytes)
  {
-	 if (ec||!started_)
-	 {
-		 std::cout << ec.what() << std::endl;
-
-		 started_ = false;
-
-		 return;
-	 }
+	 ErrorHandle(ec);
 
 	 std::istream in(&read_buf);
 
@@ -83,7 +90,7 @@
 
 	 if (msg.find("ping") == 0) { on_ping(); }
 	 
-	 else if (msg.find("clients") == 0) { on_clients(); }
+	 else if (msg.find("ask_clients") == 0) { on_clients(); }
 
 	 else if (msg.find("login") == 0) { on_login(msg); }
 
@@ -98,14 +105,7 @@
 
  void client::on_write(const boost::system::error_code& ec, size_t bytes)
  {
-	 if (ec)
-	 {
-		 std::cout << ec.what() << std::endl;
-
-		 started_ = false;
-
-		 return;
-	 }
+	 ErrorHandle(ec);
 
 	 do_read();
  }
@@ -121,6 +121,7 @@
  void client::on_clients()
  {
 	 std::string answer = "clients ";
+
 	 for (auto client : clients_)
 	 {
 		 answer += client->username;
@@ -128,6 +129,8 @@
 	 answer += '\n';
 
 	 do_write(answer);
+
+	 clients_list_changed = false;
  }
 
  void client::on_login(std::string &msg)
@@ -139,6 +142,11 @@
 	 last_ping = boost::posix_time::microsec_clock::local_time();
 
 	 do_write("login_ok\n");
+
+	 for (auto client : clients_)
+	 {
+		 client->clients_list_changed = true;
+	 }
  }
 
  void client::post_check_ping()
@@ -152,12 +160,40 @@
  {
 	 boost::posix_time::ptime now = boost::posix_time::microsec_clock::local_time();
 
-	 if ((now - last_ping).total_milliseconds() > 5000)
+	 auto resolution = (now - last_ping).total_milliseconds();
+
+	 std::cout<<"Time from last ping " << resolution << std::endl;
+
+	 if ( resolution> 5000)
 	 {
+		 std::cout << "Client " + username << " was stopped" << std::endl;
+
 		 stop();
+
 	 }
 
 	 last_ping = boost::posix_time::microsec_clock::local_time();
+ }
+
+ inline void client::ErrorHandle(const boost::system::error_code& ec)
+ {
+	 if (!ec)
+	 {
+		 return;
+	 }
+	 else if (ec.value() == 10054)
+	 {
+		 std::cout << "Connections reset by client "<<username << std::endl;
+
+		 stop();
+	 }
+	 else
+	 {
+		 std::cout << "Unrnown error" << std::endl;
+
+		 std::cout << ec.what() << std::endl;
+	 }
+
  }
 
 

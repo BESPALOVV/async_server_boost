@@ -31,6 +31,7 @@ private:
 
 	std::vector<boost::shared_ptr<client>> clients_;
 
+	
 
 
 
